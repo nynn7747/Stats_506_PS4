@@ -1,0 +1,317 @@
+---
+title: "Stats_506_PS4"
+author: "Annie Yannan Niu"
+format: 
+  html:
+    embed-resources: true
+editor: visual
+---
+
+## Github Link
+
+<https://github.com/nynn7747/Stats_506_PS4>
+
+## **Problem 1 - Tidyverse**
+
+```{r}
+library(tidyverse)
+library(nycflights13)
+```
+
+### a. Table for departure delay
+
+```{r}
+# head(flights)
+# dim(flights)
+
+# Exclude any destination with under 10 flights
+nonsmall_flights <- flights %>%
+  group_by(dest) %>%
+  summarise(n_flight = n()) %>%
+  filter(n_flight >= 10)
+
+dept_delay_flights <- flights %>%
+  inner_join(nonsmall_flights, by = "dest") %>% # Large destinations
+  group_by(origin) %>% # Group by dept airport
+  summarise(mean_delay = round(mean(dep_delay, na.rm = TRUE), 2),
+            median_delay = median(dep_delay, na.rm = TRUE)) %>%
+  left_join(airports, by = c("origin" = "faa")) %>% # Link codes to names
+  select(name, mean_delay, median_delay) %>%
+  arrange(desc(mean_delay)) %>%
+  ungroup()
+# Show the table
+print(dept_delay_flights)
+
+```
+
+### b. Table for arrive delay
+
+```{r}
+arr_delay_flights <- flights %>%
+  inner_join(nonsmall_flights, by = "dest") %>%
+  group_by(origin) %>%
+  summarise(mean_delay = round(mean(arr_delay, na.rm = TRUE), 2),
+            median_delay = median(arr_delay, na.rm = TRUE))%>%
+  left_join(airports, by = c("origin" = "faa")) %>%
+  select(name, mean_delay, median_delay) %>%
+  arrange(desc(mean_delay)) %>%
+  ungroup()
+
+print(arr_delay_flights)
+```
+
+### c. Aircraft model with the fastest average speed
+
+```{r}
+# head(planes)
+flights %>%
+  # A new variable with unit as mph
+  mutate(speed_mph = distance / (air_time / 60)) %>%
+  # Link planes to models
+  left_join(planes, by = "tailnum") %>%
+  # Summarise based on models
+  group_by(model) %>%
+  summarise(
+    avg_speed = round(mean(speed_mph, na.rm = TRUE), 2),
+    num_flights = n()
+  ) %>%
+  arrange(desc(avg_speed)) %>%
+  head(1) # Only show the highest one
+```
+
+## **Problem 2 - `get_temp()`**
+
+### a. Create the function
+
+```{r}
+# Import data
+nnmaps <- read.csv("/Users/nynn/Library/CloudStorage/OneDrive-Umich/Umich course/2024_Fall/Stats 506/Stats_506_PS/Stats_506_PS4/chicago-nmmaps.csv")
+# head(nnmaps)
+
+#' @function get_temp: request the average temperature for a given month
+#' @param month: Month, either a numeric 1-12 or a string.
+#' @param year: A numeric year.
+#' @param data: The data set to obtain data from.
+#' @param celsius: Logically indicating whther the results should be in celsius. Default FALSE
+#' @param average_fn: A function with which to compute the mean. Default is mean.
+
+get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
+  # Sanitize the year input
+  year <- as.numeric(year)
+  # Sanitize the month input - Apr
+  if (is.numeric(month)) {
+    if (month >= 1 & month <= 12 ) {
+      month <- month.abb[month]  # Convert numeric month to abbreviated month name
+    } else {
+      stop("Error: month must be a valid 3-letter abbreviation or number between 1 and 12.")
+    }
+  } else if (is.character(month)) {
+      month <- substr(month, 1, 3)  
+      if (!month %in% month.abb) {
+        stop("Error: month must be a valid 3-letter abbreviation or number between 1 and 12.")
+      }
+  } else {
+    stop("Error: month must be either a number or a string.")
+  }
+  
+  # Select the targeted month and year
+  data_month <- data %>%
+    filter(month == month, year == year)
+  # Compute the avg based on the function
+  temp <- average_fn(data_month$temp)
+  
+  # Transfrom the output based on Celsius
+  if (celsius == FALSE) {
+    return(paste0("Average temperature is ", round(temp, 2), " F"))
+  } else {
+    temp <- (temp - 32) * 5 / 9
+    return(paste0("Average temperature is ", round(temp, 2), " C"))
+  }
+  
+}
+```
+
+### b. Test the function
+
+```{r}
+# Test cases
+get_temp("Apr", 1999, data = nnmaps)
+get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
+get_temp(10, 1998, data = nnmaps, average_fn = median)
+# get_temp(13, 1998, data = nnmaps)  # Should return an error for invalid month
+get_temp(2, 2005, data = nnmaps)
+get_temp("November", 1999, data = nnmaps, celsius = TRUE, 
+         average_fn = function(x) {
+           x %>% sort -> x
+           x[2:(length(x) - 1)] %>% mean %>% return
+         })
+```
+
+## **Problem 3 - Visualization**
+
+```{r}
+# Import data
+art_sales <- read.csv("/Users/nynn/Library/CloudStorage/OneDrive-Umich/Umich course/2024_Fall/Stats 506/Stats_506_PS/Stats_506_PS4/df_for_ml_improved_new_market.csv")
+
+# # Calculate the median, mean, and median log price for each year
+# median_data <- art_sales %>%
+#   group_by(year) %>%
+#   summarise(median = median(price_usd),
+#             mean = mean(price_usd),
+#             median_log_price = median(log(price_usd), na.rm = TRUE))
+
+```
+
+### a. The change in the sales price in USD over time
+
+**Based on the plot, the sales price increased in USD over time and the variance also increased with time going.**
+
+```{r}
+# Prepare data with median and IQR
+df_yearly_price <- art_sales %>%
+  group_by(year) %>%
+  summarise(
+    median_price_usd = median(price_usd, na.rm = TRUE),
+    lower_q = quantile(price_usd, 0.25, na.rm = TRUE),  # 25th percentile
+    upper_q = quantile(price_usd, 0.75, na.rm = TRUE)   # 75th percentile
+  )
+
+# Plot the median and IQR over time
+ggplot(data = df_yearly_price, aes(x = as.numeric(year), y = median_price_usd)) +
+  # IQR
+  geom_ribbon(aes(ymin = lower_q, ymax = upper_q, 
+                  fill = "IQR (25th - 75th Percentile)"), alpha = 0.2) +
+  # Median line 
+  geom_line(aes(y = median_price_usd, color = "Median Price"), size = 1.5) +
+  # Median points 
+  geom_point(aes(y = median_price_usd, color = "Median Price"), size = 2) + 
+  
+  # Set the legend
+  scale_fill_manual(values = c("IQR (25th - 75th Percentile)" = "lightblue")) +  
+  scale_color_manual(values = c("Median Price" = "blue")) +  
+  # Add titles and legend
+  labs(
+    title = "Sales Price Distribution Over Time with IQR",
+    x = "Year",
+    y = "Sales Price (USD)",
+    fill = "Legend",  # Legend label for the ribbon
+    color = "Legend"  # Legend label for the line
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) 
+
+```
+
+### b. The distribution of genre of sales across years
+
+**According to the plot, absolute numbers of all genre increased across years. Besides, the percentage of Print increased while Photography remained similar and Sculpture decreased a bit.**
+
+```{r}
+# Summarize data by year and genre, including NAs/no info as others
+genre_summary <- art_sales %>%
+  group_by(year) %>%
+  summarise(
+    Photography = sum(Genre___Photography, na.rm = TRUE),
+    Print = sum(Genre___Print, na.rm = TRUE),
+    Sculpture = sum(Genre___Sculpture, na.rm = TRUE),
+    Other = sum(Genre___Photography == 0 & Genre___Print == 0 & Genre___Sculpture == 0) 
+  )
+
+# Reshape data for plot
+genre_long <- genre_summary %>%
+  pivot_longer(cols = c(Photography, Print, Sculpture), 
+               names_to = "Genre", 
+               values_to = "Count")
+
+# Create a bar plot for genre
+ggplot(genre_long, aes(x = as.factor(year), y = Count, fill = Genre)) +
+  geom_bar(stat = "identity") +  
+  labs(
+    title = "Distribution of Genre Over Years - Absolute Number",
+    x = "Year",
+    y = "Number of Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) 
+
+# Create the bar plot for genre with all years as 100%
+ggplot(genre_long, aes(x = as.factor(year), y = Count, fill = Genre)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(
+    title = "Distribution of Genre Over Years",
+    x = "Year",
+    y = "Percentage of Sales"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) 
+
+```
+
+### c. How does the genre affect the change in sales price over time?
+
+**All genre had increase in sales price over time. However, the increases shows difference.**
+
+```{r}
+# Create a dataset for genre
+art_sales_genre<- art_sales %>%
+  mutate(Genre = case_when(
+    Genre___Photography == 1 ~ "Photography",
+    Genre___Print == 1 ~ "Print",
+    Genre___Sculpture == 1 ~ "Sculpture",
+    TRUE ~ "Other"
+  )) %>%
+  select(year, price_usd, Genre)
+
+# Calculate IQR (Interquartile Range) for each genre and year
+genre_price_summary <- art_sales_genre %>%
+  group_by(year, Genre) %>%
+  summarise(
+    median_price = median(price_usd, na.rm = TRUE),
+    lower_q = quantile(price_usd, 0.25, na.rm = TRUE),  # 25th percentile
+    upper_q = quantile(price_usd, 0.75, na.rm = TRUE)   # 75th percentile
+  )
+
+# Plot the trend for different genre
+ggplot(genre_price_summary, aes(x = as.factor(year), y = median_price, 
+                                group = Genre, color = Genre)) +
+  # Ribbon for IQR
+  geom_ribbon(aes(ymin = lower_q, ymax = upper_q, fill = Genre), alpha = 0.2) + 
+  geom_line(size = 1.5) +  # Line plot for the median price
+  geom_point() +
+  labs(
+    title = "Sales Price Over Time by Genre with IQR",
+    x = "Year",
+    y = "Median Sales Price (USD)"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 14),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.title = element_blank(),
+    legend.position = "top"
+  ) +
+  facet_wrap(~ Genre, scales = "free_y") 
+```
