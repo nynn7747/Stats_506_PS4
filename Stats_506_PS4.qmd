@@ -95,19 +95,19 @@ nnmaps <- read.csv("/Users/nynn/Library/CloudStorage/OneDrive-Umich/Umich course
 #' @param celsius: Logically indicating whther the results should be in celsius. Default FALSE
 #' @param average_fn: A function with which to compute the mean. Default is mean.
 
-get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
+get_temp <- function(Month, Year, data, celsius = FALSE, average_fn = mean) {
   # Sanitize the year input
-  year <- as.numeric(year)
+  Year <- as.numeric(Year)
   # Sanitize the month input - Apr
-  if (is.numeric(month)) {
-    if (month >= 1 & month <= 12 ) {
-      month <- month.abb[month]  # Convert numeric month to abbreviated month name
+  if (is.numeric(Month)) {
+    if (Month >= 1 & Month <= 12 ) {
+      Month <- month.abb[Month]  # Convert numeric month to abbreviated month name
     } else {
       stop("Error: month must be a valid 3-letter abbreviation or number between 1 and 12.")
     }
-  } else if (is.character(month)) {
-      month <- substr(month, 1, 3)  
-      if (!month %in% month.abb) {
+  } else if (is.character(Month)) {
+      Month <- substr(Month, 1, 3)  
+      if (!Month %in% month.abb) {
         stop("Error: month must be a valid 3-letter abbreviation or number between 1 and 12.")
       }
   } else {
@@ -116,7 +116,7 @@ get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
   
   # Select the targeted month and year
   data_month <- data %>%
-    filter(month == month, year == year)
+    filter(as.character(month) == Month & year == Year)
   # Compute the avg based on the function
   temp <- average_fn(data_month$temp)
   
@@ -138,7 +138,7 @@ get_temp <- function(month, year, data, celsius = FALSE, average_fn = mean) {
 get_temp("Apr", 1999, data = nnmaps)
 get_temp("Apr", 1999, data = nnmaps, celsius = TRUE)
 get_temp(10, 1998, data = nnmaps, average_fn = median)
-# get_temp(13, 1998, data = nnmaps)  # Should return an error for invalid month
+#get_temp(13, 1998, data = nnmaps)  # Should return an error for invalid month
 get_temp(2, 2005, data = nnmaps)
 get_temp("November", 1999, data = nnmaps, celsius = TRUE, 
          average_fn = function(x) {
@@ -210,7 +210,7 @@ ggplot(data = df_yearly_price, aes(x = as.numeric(year), y = median_price_usd)) 
 
 ### b. The distribution of genre of sales across years
 
-**According to the plot, absolute numbers of all genre increased across years. Besides, the percentage of Print increased while Photography remained similar and Sculpture decreased a bit.**
+**According to the plot, absolute numbers of all genre increased across years. Besides, the percentage of Print and Photography increased, Sculpture remained similar, while Painting decreased a bit.**
 
 ```{r}
 # Summarize data by year and genre, including NAs/no info as others
@@ -220,12 +220,14 @@ genre_summary <- art_sales %>%
     Photography = sum(Genre___Photography, na.rm = TRUE),
     Print = sum(Genre___Print, na.rm = TRUE),
     Sculpture = sum(Genre___Sculpture, na.rm = TRUE),
-    Other = sum(Genre___Photography == 0 & Genre___Print == 0 & Genre___Sculpture == 0) 
+    Painting = sum(Genre___Painting, na.rm = TRUE),
+    Other = sum(Genre___Photography == 0 & Genre___Print == 0 &
+                  Genre___Sculpture == 0 & Genre___Painting == 0) 
   )
 
 # Reshape data for plot
 genre_long <- genre_summary %>%
-  pivot_longer(cols = c(Photography, Print, Sculpture), 
+  pivot_longer(cols = c(Photography, Print, Painting, Sculpture), 
                names_to = "Genre", 
                values_to = "Count")
 
@@ -278,10 +280,12 @@ art_sales_genre<- art_sales %>%
     Genre___Photography == 1 ~ "Photography",
     Genre___Print == 1 ~ "Print",
     Genre___Sculpture == 1 ~ "Sculpture",
+    Genre___Painting == 1 ~ "Painting",
     TRUE ~ "Other"
   )) %>%
   select(year, price_usd, Genre)
-
+art_sales_genre$Genre <- factor(art_sales_genre$Genre, levels = c("Painting", "Photography", "Print", "Sculpture", "Other"))
+  
 # Calculate IQR (Interquartile Range) for each genre and year
 genre_price_summary <- art_sales_genre %>%
   group_by(year, Genre) %>%
